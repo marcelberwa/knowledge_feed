@@ -27,7 +27,12 @@ public class ArticleDatabase {
                     url TEXT UNIQUE NOT NULL,
                     snippet TEXT,
                     article_text TEXT,
-                    scraped_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    summary TEXT,
+                    topics TEXT,
+                    key_points TEXT,
+                    relevance_score INTEGER,
+                    scraped_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    analyzed_date TIMESTAMP
                 )
                 """;
             
@@ -51,6 +56,32 @@ public class ArticleDatabase {
             pstmt.setString(2, article.getUrl());
             pstmt.setString(3, article.getSnippet());
             pstmt.setString(4, article.getArticleText());
+            
+            pstmt.executeUpdate();
+        }
+    }
+    
+    /**
+     * Saves article analysis results to the database
+     * @param url The article URL
+     * @param analysis The LLM analysis results
+     * @throws SQLException if update operation fails
+     */
+    public static void saveAnalysis(String url, LLMProcessor.ArticleAnalysis analysis) throws SQLException {
+        String updateSQL = """
+                UPDATE articles 
+                SET summary = ?, topics = ?, key_points = ?, relevance_score = ?, analyzed_date = CURRENT_TIMESTAMP 
+                WHERE url = ?
+                """;
+        
+        try (Connection conn = DriverManager.getConnection(DB_URL);
+             PreparedStatement pstmt = conn.prepareStatement(updateSQL)) {
+            
+            pstmt.setString(1, analysis.getSummary());
+            pstmt.setString(2, String.join(", ", analysis.getTopics()));
+            pstmt.setString(3, String.join(" | ", analysis.getKeyPoints()));
+            pstmt.setInt(4, analysis.getRelevanceScore());
+            pstmt.setString(5, url);
             
             pstmt.executeUpdate();
         }

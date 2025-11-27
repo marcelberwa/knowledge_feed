@@ -140,26 +140,65 @@ public class TechNewsScraper {
      * @param articles List of articles to process
      */
     private static void processArticles(List<NewsArticle> articles) {
+        int successCount = 0;
+        int analysisCount = 0;
+        
         for (int i = 0; i < articles.size(); i++) {
             NewsArticle article = articles.get(i);
-            System.out.println("\nArticle #" + (i + 1));
-            System.out.println(article);
+            System.out.println("\n" + "=".repeat(60));
+            System.out.println("Article #" + (i + 1) + " of " + articles.size());
+            System.out.println("=".repeat(60));
+            System.out.println("Title: " + article.getTitle());
+            System.out.println("URL: " + article.getUrl());
             
             // Fetch full article text
             if (!article.getUrl().isEmpty()) {
-                System.out.println("Fetching full article text...");
+                System.out.println("\n[1/3] Fetching full article text...");
                 String fullText = ArticleFetcher.fetchArticleText(article.getUrl());
                 article.setArticleText(fullText);
                 
                 // Save to database
                 try {
+                    System.out.println("[2/3] Saving to database...");
                     ArticleDatabase.saveArticle(article);
-                    System.out.println("✓ Saved to database");
+                    System.out.println("✓ Article saved");
+                    successCount++;
+                    
+                    // Analyze with LLM
+                    System.out.println("[3/3] Analyzing with LLM...");
+                    try {
+                        LLMProcessor.ArticleAnalysis analysis = LLMProcessor.analyzeArticle(article);
+                        
+                        // Display analysis
+                        System.out.println("\n--- LLM Analysis ---");
+                        System.out.println("Summary: " + analysis.getSummary());
+                        System.out.println("Topics: " + String.join(", ", analysis.getTopics()));
+                        System.out.println("Key Points:");
+                        for (String point : analysis.getKeyPoints()) {
+                            System.out.println("  • " + point);
+                        }
+                        System.out.println("Relevance Score: " + analysis.getRelevanceScore() + "/10");
+                        
+                        // Save analysis
+                        ArticleDatabase.saveAnalysis(article.getUrl(), analysis);
+                        System.out.println("✓ Analysis saved");
+                        analysisCount++;
+                        
+                    } catch (Exception e) {
+                        System.err.println("✗ LLM analysis failed: " + e.getMessage());
+                    }
+                    
                 } catch (SQLException e) {
                     System.err.println("✗ Failed to save article: " + e.getMessage());
                 }
             }
         }
+        
+        System.out.println("\n" + "=".repeat(60));
+        System.out.println("Processing Complete");
+        System.out.println("=".repeat(60));
+        System.out.println("Articles saved: " + successCount + "/" + articles.size());
+        System.out.println("Articles analyzed: " + analysisCount + "/" + articles.size());
     }
     
     /**
