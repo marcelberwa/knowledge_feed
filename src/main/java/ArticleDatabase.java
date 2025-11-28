@@ -1,6 +1,7 @@
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
+import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 
@@ -85,6 +86,28 @@ public class ArticleDatabase {
             
             pstmt.executeUpdate();
         }
+    }
+    
+    /**
+     * Checks if an article with the given URL already exists in the database
+     * @param url The article URL to check
+     * @return true if article exists, false otherwise
+     * @throws SQLException if query fails
+     */
+    public static boolean articleExists(String url) throws SQLException {
+        String querySQL = "SELECT COUNT(*) FROM articles WHERE url = ?";
+        
+        try (Connection conn = DriverManager.getConnection(DB_URL);
+             PreparedStatement pstmt = conn.prepareStatement(querySQL)) {
+            
+            pstmt.setString(1, url);
+            ResultSet rs = pstmt.executeQuery();
+            
+            if (rs.next()) {
+                return rs.getInt(1) > 0;
+            }
+        }
+        return false;
     }
     
     /**

@@ -13,10 +13,14 @@ import com.google.gson.JsonObject;
  */
 public class LLMProcessor {
     
-    private static final String LM_STUDIO_URL = "http://192.168.0.227:1234/v1/chat/completions";
-    private static final int TIMEOUT_SECONDS = 60;
+    // Change this to match your LM Studio server address
+    // Use "http://localhost:1234" if running on same machine
+    // Use "http://192.168.0.227:1234" if running on another machine
+    private static final String LM_STUDIO_URL = "http://localhost:1234/v1/chat/completions";
+    private static final int TIMEOUT_SECONDS = 120;
     private static final HttpClient httpClient = HttpClient.newBuilder()
-            .connectTimeout(Duration.ofSeconds(TIMEOUT_SECONDS))
+            .version(HttpClient.Version.HTTP_1_1)
+            .connectTimeout(Duration.ofSeconds(30))
             .build();
     private static final Gson gson = new Gson();
     
@@ -96,11 +100,15 @@ public class LLMProcessor {
      * Calls the LM Studio API
      */
     private static String callLLM(String userPrompt) throws IOException, InterruptedException {
+        System.out.println("DEBUG: Preparing LLM request...");
+        System.out.println("DEBUG: LM Studio URL: " + LM_STUDIO_URL);
+        
         // Build request body
         JsonObject requestBody = new JsonObject();
         requestBody.addProperty("model", "local-model");
         requestBody.addProperty("temperature", 0.7);
         requestBody.addProperty("max_tokens", 1000);
+        requestBody.addProperty("stream", false);
         
         JsonArray messages = new JsonArray();
         
@@ -120,21 +128,45 @@ public class LLMProcessor {
         
         requestBody.add("messages", messages);
         
-        // Build HTTP request
+        String requestBodyStr = requestBody.toString();
+        System.out.println("DEBUG: Request body size: " + requestBodyStr.length() + " bytes");
+        System.out.println("DEBUG: First 200 chars of request: " + requestBodyStr.substring(0, Math.min(200, requestBodyStr.length())));
+        
+        // Build HTTP request - explicitly set POST method
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create(LM_STUDIO_URL))
                 .timeout(Duration.ofSeconds(TIMEOUT_SECONDS))
                 .header("Content-Type", "application/json")
-                .POST(HttpRequest.BodyPublishers.ofString(requestBody.toString()))
+                .header("Accept", "application/json")
+                .method("POST", HttpRequest.BodyPublishers.ofString(requestBodyStr))
                 .build();
         
+        System.out.println("DEBUG: HTTP Method: " + request.method());
+        System.out.println("DEBUG: Request URI: " + request.uri());
+        System.out.println("DEBUG: Sending request to LM Studio...");
+        long startTime = System.currentTimeMillis();
+        
         // Send request
-        HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+        HttpResponse<String> response;
+        try {
+            response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+        } catch (IOException e) {
+            System.err.println("DEBUG: IOException during send: " + e.getMessage());
+            throw e;
+        }
+        
+        long duration = System.currentTimeMillis() - startTime;
+        System.out.println("DEBUG: Received response in " + duration + "ms");
+        System.out.println("DEBUG: Status code: " + response.statusCode());
+        System.out.println("DEBUG: Response headers: " + response.headers().map());
         
         if (response.statusCode() != 200) {
+            System.err.println("DEBUG: Response body: " + response.body());
             throw new IOException("LLM API returned status code: " + response.statusCode() + 
                                 " Body: " + response.body());
         }
+        
+        System.out.println("DEBUG: Response body length: " + response.body().length());
         
         // Parse response
         JsonObject responseJson = gson.fromJson(response.body(), JsonObject.class);
@@ -142,7 +174,9 @@ public class LLMProcessor {
         if (choices != null && choices.size() > 0) {
             JsonObject firstChoice = choices.get(0).getAsJsonObject();
             JsonObject message = firstChoice.getAsJsonObject("message");
-            return message.get("content").getAsString();
+            String content = message.get("content").getAsString();
+            System.out.println("DEBUG: Response content length: " + content.length() + " chars");
+            return content;
         }
         
         throw new IOException("No response from LLM");
@@ -193,5 +227,68 @@ public class LLMProcessor {
         }
         
         return new ArticleAnalysis(summary, topics, keyPoints, relevanceScore);
+    }
+    
+    /**
+     * Tests the connection to LM Studio
+     * @return true if connection is successful
+     */
+    public static boolean testConnection() {
+        try {
+            System.out.println("Testing connection to LM Studio at: " + LM_STUDIO_URL);
+            
+            // Simple test request
+            JsonObject requestBody = new JsonObject();
+            requestBody.addProperty("model", "local-model");
+            requestBody.addProperty("temperature", 0.7);
+            requestBody.addProperty("max_tokens", 50);
+            requestBody.addProperty("stream", false);
+            
+            JsonArray messages = new JsonArray();
+            JsonObject userMessage = new JsonObject();
+            userMessage.addProperty("role", "user");
+            userMessage.addProperty("content", "Say 'Hello' if you can receive this message.");
+            messages.add(userMessage);
+            requestBody.add("messages", messages);
+            
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(LM_STUDIO_URL))
+                    .timeout(Duration.ofSeconds(10))
+                    .header("Content-Type", "application/json")
+                    .header("Accept", "application/json")
+                    .POST(HttpRequest.BodyPublishers.ofString(requestBody.toString()))
+                    .build();
+            
+            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+            
+            System.out.println("✓ Connection successful!");
+            System.out.println("Status: " + response.statusCode());
+            System.out.println("Response: " + response.body());
+            
+            return response.statusCode() == 200;
+            
+        } catch (Exception e) {
+            System.err.println("✗ Connection failed: " + e.getMessage());
+            e.printStackTrace();
+            return false;
+        }
+    }
+    
+    /**
+     * Main method for testing LLM connection
+     */
+    public static void main(String[] args) {
+        System.out.println("LM Studio Connection Test");
+        System.out.println("=========================\n");
+        
+        if (testConnection()) {
+            System.out.println("\n✓ LM Studio is ready to use!");
+        } else {
+            System.out.println("\n✗ Please check:");
+            System.out.println("  1. LM Studio is running");
+            System.out.println("  2. A model is loaded");
+            System.out.println("  3. Server is started");
+            System.out.println("  4. URL is correct: " + LM_STUDIO_URL);
+        }
     }
 }
