@@ -111,6 +111,19 @@ public class ArticleDatabase {
     }
     
     /**
+     * Deletes all articles from the database.
+     * Use with caution - this removes all rows from the articles table.
+     * @throws SQLException if the delete operation fails
+     */
+    public static void deleteAllArticles() throws SQLException {
+        String deleteSQL = "DELETE FROM articles";
+        try (Connection conn = DriverManager.getConnection(DB_URL);
+             PreparedStatement pstmt = conn.prepareStatement(deleteSQL)) {
+            pstmt.executeUpdate();
+        }
+    }
+    
+    /**
      * Gets a database connection
      * @return Connection object to the SQLite database
      * @throws SQLException if connection fails

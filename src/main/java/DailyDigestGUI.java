@@ -24,6 +24,7 @@ public class DailyDigestGUI extends JFrame {
     private JComboBox<String> sortFilter;
     private JButton startImportButton;
     private JButton refreshButton;
+    private JButton deleteAllButton;
     private JTextArea logArea;
     private JProgressBar progressBar;
     private volatile boolean isImporting = false;
@@ -134,6 +135,35 @@ public class DailyDigestGUI extends JFrame {
         controlsPanel.add(sortFilter);
         controlsPanel.add(Box.createHorizontalStrut(15));
         controlsPanel.add(refreshButton);
+        controlsPanel.add(Box.createHorizontalStrut(10));
+
+        // Delete All button
+        deleteAllButton = new JButton("Delete All Articles");
+        deleteAllButton.setFont(new Font("Arial", Font.BOLD, 12));
+        deleteAllButton.setBackground(new Color(220, 38, 38));
+        deleteAllButton.setForeground(Color.WHITE);
+        deleteAllButton.setFocusPainted(false);
+        deleteAllButton.addActionListener(ev -> {
+            int ok = JOptionPane.showConfirmDialog(this,
+                    "Delete all articles from the database? This cannot be undone.",
+                    "Confirm Delete",
+                    JOptionPane.YES_NO_OPTION,
+                    JOptionPane.WARNING_MESSAGE);
+            if (ok == JOptionPane.YES_OPTION) {
+                try {
+                    ArticleDatabase.deleteAllArticles();
+                    log("All articles deleted from database.");
+                    SwingUtilities.invokeLater(() -> filterArticles());
+                } catch (SQLException ex) {
+                    log("Failed to delete articles: " + ex.getMessage());
+                    JOptionPane.showMessageDialog(this,
+                            "Failed to delete articles: " + ex.getMessage(),
+                            "Error",
+                            JOptionPane.ERROR_MESSAGE);
+                }
+            }
+        });
+        controlsPanel.add(deleteAllButton);
         
         // Stats and progress panel
         JPanel statusPanel = new JPanel(new BorderLayout(10, 5));
